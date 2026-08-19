@@ -33,10 +33,11 @@ export function CartItemControls({
         <input
           type="number"
           name="quantity"
+          inputMode="numeric"
           min={1}
           max={Math.max(1, max)}
           defaultValue={quantity}
-          className="w-16 rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="min-h-11 w-16 rounded border border-neutral-300 px-2 py-1 text-sm"
         />
         <Button type="submit" variant="ghost" className="text-xs px-2 py-1" disabled={updating}>
           Update
