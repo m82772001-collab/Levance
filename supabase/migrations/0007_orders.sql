@@ -9,6 +9,8 @@ create type payment_status as enum ('pending', 'paid', 'failed', 'refunded');
 create table orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users (id) on delete set null,
+  profile_id uuid references profiles (id) on delete set null,
+  cart_id uuid references carts (id) on delete set null,
   order_number text not null unique,
   status order_status not null default 'pending',
   subtotal_cents integer not null check (subtotal_cents >= 0),
@@ -21,6 +23,8 @@ create table orders (
 );
 
 create index orders_user_idx on orders (user_id);
+create index orders_profile_idx on orders (profile_id);
+create index orders_cart_idx on orders (cart_id);
 
 create table order_items (
   id uuid primary key default gen_random_uuid(),
@@ -33,10 +37,6 @@ create table order_items (
 
 create index order_items_order_idx on order_items (order_id);
 
--- Payments are written ONLY by the server-side Stripe webhook handler
--- (via the service-role client), never directly by client code. A row
--- here — not the order.status column alone — is the audit trail of
--- what Stripe actually confirmed.
 create table payments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references orders (id) on delete cascade,
@@ -71,21 +71,11 @@ alter table shipments enable row level security;
 
 create policy "orders_owner_read" on orders for select using (auth.uid() = user_id or is_admin());
 create policy "orders_admin_write" on orders for all using (is_admin()) with check (is_admin());
--- Note: order INSERT during checkout happens server-side via the
--- service-role client (checkout is unauthenticated-guest-safe and must
--- validate pricing server-side), not via a customer-facing RLS insert
--- policy.
-
 create policy "order_items_owner_read" on order_items for select
   using (exists (select 1 from orders o where o.id = order_id and (o.user_id = auth.uid() or is_admin())));
 create policy "order_items_admin_write" on order_items for all using (is_admin()) with check (is_admin());
-
 create policy "payments_owner_read" on payments for select
   using (exists (select 1 from orders o where o.id = order_id and (o.user_id = auth.uid() or is_admin())));
--- No insert/update policy for payments at all: only the service-role
--- client (which bypasses RLS) may write payment records, from the
--- Stripe webhook handler.
-
 create policy "shipments_owner_read" on shipments for select
   using (exists (select 1 from orders o where o.id = order_id and (o.user_id = auth.uid() or is_admin())));
 create policy "shipments_admin_write" on shipments for all using (is_admin()) with check (is_admin());
