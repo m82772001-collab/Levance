@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ProductListItem } from "@/lib/catalog/queries";
 import { formatMoney } from "@/lib/catalog/queries";
@@ -8,13 +9,15 @@ export function ProductCard({ product }: { product: ProductListItem }) {
       href={`/product/${product.slug}`}
       className="group block rounded-lg overflow-hidden border border-neutral-200 bg-white transition-shadow hover:shadow-card"
     >
-      <div className="aspect-[4/5] bg-neutral-100 overflow-hidden">
+      <div className="relative aspect-[4/5] bg-neutral-100 overflow-hidden">
         {product.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={product.image_url}
-            alt=""
-            className="h-full w-full object-cover transition-transform duration-500 ease-signature group-hover:scale-[1.03]"
+            alt={product.image_alt ?? product.name}
+            fill
+            sizes="(max-width: 767px) 50vw, (max-width: 1023px) 33vw, 25vw"
+            className="object-cover transition-transform duration-500 ease-signature group-hover:scale-[1.03]"
+            unoptimized
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-neutral-400 text-xs">
