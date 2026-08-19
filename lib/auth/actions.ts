@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/db/supabase-server";
 import { claimGuestCart } from "@/lib/cart/service";
+import { assertAuthRateLimit } from "@/lib/security/auth-rate-limit";
 import {
   loginSchema,
   signupSchema,
@@ -18,24 +19,20 @@ export type AuthActionState = {
 
 const INVALID_CREDENTIALS = "Invalid email or password.";
 const GENERIC_SIGNUP_ERROR = "We couldn't create your account. Please check your details and try again.";
+const RATE_LIMITED = "Too many sign-in attempts. Please try again later.";
 
 export async function loginAction(_prev: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const raw = { email: String(formData.get("email") ?? ""), password: String(formData.get("password") ?? "") };
   const parsed = loginSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: INVALID_CREDENTIALS, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
-  }
+  if (!parsed.success) return { error: INVALID_CREDENTIALS, fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+
+  if (!(await assertAuthRateLimit(parsed.data.email))) return { error: RATE_LIMITED };
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
   if (error || !data.user) return { error: INVALID_CREDENTIALS };
 
-  try {
-    await claimGuestCart(data.user.id);
-  } catch {
-    // Do not fail an otherwise valid login because guest-cart migration is unavailable.
-    // The cart can be recovered on the next authenticated cart interaction.
-  }
+  try { await claimGuestCart(data.user.id); } catch { /* preserve successful authentication */ }
 
   const redirectTo = String(formData.get("redirectTo") ?? "/account");
   const safeRedirect = redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/account";
@@ -51,9 +48,9 @@ export async function signupAction(_prev: AuthActionState, formData: FormData): 
     acceptedTerms: formData.get("acceptedTerms") === "on" || formData.get("acceptedTerms") === "true",
   };
   const parsed = signupSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: "Please fix the errors below.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
-  }
+  if (!parsed.success) return { error: "Please fix the errors below.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+
+  if (!(await assertAuthRateLimit(parsed.data.email))) return { error: RATE_LIMITED };
 
   const supabase = await createSupabaseServerClient();
   const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
@@ -63,34 +60,17 @@ export async function signupAction(_prev: AuthActionState, formData: FormData): 
     options: { data: { full_name: parsed.data.fullName }, emailRedirectTo: `${origin}/auth/callback?next=/account` },
   });
 
-  // Do not expose provider-specific errors such as "user already registered".
-  if (error) return { error: GENERIC_SIGNUP_ERROR };
-  if (!data.user) return { error: GENERIC_SIGNUP_ERROR };
+  if (error || !data.user) return { error: GENERIC_SIGNUP_ERROR };
+  try { const { ensureCommonMembership } = await import("@/lib/membership/assign"); await ensureCommonMembership(data.user.id); } catch { /* retry on authenticated access */ }
+  try { await claimGuestCart(data.user.id); } catch { /* preserve successful account creation */ }
 
-  try {
-    const { ensureCommonMembership } = await import("@/lib/membership/assign");
-    await ensureCommonMembership(data.user.id);
-  } catch {
-    // Membership provisioning is retried on authenticated access.
-  }
-
-  try {
-    await claimGuestCart(data.user.id);
-  } catch {
-    // Account creation must not fail because a guest cart could not be claimed.
-  }
-
-  if (!data.session) {
-    return { success: "Account created. Please check your email to verify your address before signing in." };
-  }
-
+  if (!data.session) return { success: "Account created. Please check your email to verify your address before signing in." };
   redirect("/account");
 }
 
 export async function forgotPasswordAction(_prev: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const parsed = forgotPasswordSchema.safeParse({ email: String(formData.get("email") ?? "") });
   if (!parsed.success) return { error: "Please enter a valid email address." };
-
   const supabase = await createSupabaseServerClient();
   const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
   await supabase.auth.resetPasswordForEmail(parsed.data.email, { redirectTo: `${origin}/reset-password` });
@@ -100,7 +80,6 @@ export async function forgotPasswordAction(_prev: AuthActionState, formData: For
 export async function resetPasswordAction(_prev: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const parsed = resetPasswordSchema.safeParse({ password: String(formData.get("password") ?? ""), confirmPassword: String(formData.get("confirmPassword") ?? "") });
   if (!parsed.success) return { error: "Please fix the errors below.", fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> };
-
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return { error: "We couldn't update your password. Please request a new reset link." };
