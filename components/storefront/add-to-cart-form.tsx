@@ -46,7 +46,7 @@ export function AddToCartForm({ variants }: { variants: Variant[] }) {
                   type="button"
                   onClick={() => setVariantId(v.id)}
                   disabled={v.quantity_available === 0}
-                  className={`rounded border px-3 py-2 text-sm ${
+                  className={`min-h-11 min-w-11 rounded border px-3 py-2 text-sm ${
                     v.id === variantId
                       ? "border-obsidian bg-obsidian text-ivory"
                       : "border-neutral-300 hover:border-obsidian disabled:opacity-40"
@@ -65,11 +65,12 @@ export function AddToCartForm({ variants }: { variants: Variant[] }) {
         <input
           type="number"
           name="quantity"
+          inputMode="numeric"
           min={1}
           max={Math.max(1, maxQty)}
           value={qty}
           onChange={(e) => setQty(Number(e.target.value))}
-          className="w-20 rounded border border-neutral-300 px-3 py-2 text-sm"
+          className="min-h-11 w-20 rounded border border-neutral-300 px-3 py-2 text-sm"
         />
         {selected && (
           <span className="text-sm text-neutral-500">
