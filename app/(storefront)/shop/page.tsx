@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listProducts, listCategories } from "@/lib/catalog/queries";
 import { ProductCard } from "@/components/storefront/product-card";
+import { MobileFilterDrawer } from "@/components/storefront/mobile-filter-drawer";
 
 export const metadata = {
   title: "Shop",
@@ -39,6 +40,13 @@ export default async function ShopPage({ searchParams }: Props) {
   }).catch(() => ({ products: [], total: 0, pageSize: 12, page: 1 }));
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const activeFilterCount = [
+    params.q?.trim(),
+    params.category,
+    params.sort && params.sort !== "newest" ? params.sort : undefined,
+    params.min,
+    params.max,
+  ].filter(Boolean).length;
 
   return (
     <div className="container-content py-10 md:py-16">
@@ -152,6 +160,14 @@ export default async function ShopPage({ searchParams }: Props) {
           )}
         </div>
       </div>
+
+      <MobileFilterDrawer
+        query={params.q}
+        category={params.category}
+        sort={sort}
+        activeCount={activeFilterCount}
+        categories={categories}
+      />
     </div>
   );
 }
