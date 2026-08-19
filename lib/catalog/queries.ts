@@ -12,6 +12,7 @@ export type ProductListItem = {
   min_price_cents: number | null;
   compare_at_cents: number | null;
   image_url: string | null;
+  image_alt: string | null;
   currency: string;
 };
 
@@ -97,7 +98,6 @@ export async function listProducts(opts: ListProductsOpts = {}): Promise<{
 
   const supabase = await createSupabaseServerClient();
 
-  // Base product query (active only via RLS for non-admins)
   let query = supabase
     .from("products")
     .select("id, slug, name, brand, category_id, is_active, created_at", {
@@ -105,9 +105,7 @@ export async function listProducts(opts: ListProductsOpts = {}): Promise<{
     })
     .eq("is_active", true);
 
-  if (opts.categoryId) {
-    query = query.eq("category_id", opts.categoryId);
-  }
+  if (opts.categoryId) query = query.eq("category_id", opts.categoryId);
   if (opts.search?.trim()) {
     const q = opts.search.trim();
     query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
@@ -149,15 +147,12 @@ export async function listProducts(opts: ListProductsOpts = {}): Promise<{
       .eq("is_active", true),
     supabase
       .from("product_images")
-      .select("product_id, url, sort_order")
+      .select("product_id, url, alt_text, sort_order")
       .in("product_id", ids)
       .order("sort_order", { ascending: true }),
   ]);
 
-  const priceMap = new Map<
-    string,
-    { min: number; compare: number | null; currency: string }
-  >();
+  const priceMap = new Map<string, { min: number; compare: number | null; currency: string }>();
   for (const v of variants ?? []) {
     const row = v as {
       product_id: string;
@@ -175,16 +170,17 @@ export async function listProducts(opts: ListProductsOpts = {}): Promise<{
     }
   }
 
-  const imageMap = new Map<string, string>();
+  const imageMap = new Map<string, { url: string; alt: string | null }>();
   for (const img of images ?? []) {
-    const row = img as { product_id: string; url: string };
+    const row = img as { product_id: string; url: string; alt_text: string | null };
     if (!imageMap.has(row.product_id)) {
-      imageMap.set(row.product_id, row.url);
+      imageMap.set(row.product_id, { url: row.url, alt: row.alt_text });
     }
   }
 
   let result: ProductListItem[] = list.map((p) => {
     const price = priceMap.get(p.id);
+    const image = imageMap.get(p.id);
     return {
       id: p.id,
       slug: p.slug,
@@ -194,30 +190,22 @@ export async function listProducts(opts: ListProductsOpts = {}): Promise<{
       is_active: p.is_active,
       min_price_cents: price?.min ?? null,
       compare_at_cents: price?.compare ?? null,
-      image_url: imageMap.get(p.id) ?? null,
+      image_url: image?.url ?? null,
+      image_alt: image?.alt ?? null,
       currency: price?.currency ?? "USD",
     };
   });
 
-  // Client-side price filter/sort when needed (variant prices not on products table)
   if (opts.minPriceCents != null) {
-    result = result.filter(
-      (p) => p.min_price_cents != null && p.min_price_cents >= opts.minPriceCents!
-    );
+    result = result.filter((p) => p.min_price_cents != null && p.min_price_cents >= opts.minPriceCents!);
   }
   if (opts.maxPriceCents != null) {
-    result = result.filter(
-      (p) => p.min_price_cents != null && p.min_price_cents <= opts.maxPriceCents!
-    );
+    result = result.filter((p) => p.min_price_cents != null && p.min_price_cents <= opts.maxPriceCents!);
   }
   if (opts.sort === "price_asc") {
-    result = [...result].sort(
-      (a, b) => (a.min_price_cents ?? 0) - (b.min_price_cents ?? 0)
-    );
+    result = [...result].sort((a, b) => (a.min_price_cents ?? 0) - (b.min_price_cents ?? 0));
   } else if (opts.sort === "price_desc") {
-    result = [...result].sort(
-      (a, b) => (b.min_price_cents ?? 0) - (a.min_price_cents ?? 0)
-    );
+    result = [...result].sort((a, b) => (b.min_price_cents ?? 0) - (a.min_price_cents ?? 0));
   }
 
   return { products: result, total: count ?? result.length, page, pageSize };
@@ -225,7 +213,6 @@ export async function listProducts(opts: ListProductsOpts = {}): Promise<{
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail> {
   const supabase = await createSupabaseServerClient();
-
   const { data: product, error } = await supabase
     .from("products")
     .select("id, slug, name, description, brand, category_id, is_active")
@@ -246,22 +233,19 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail> {
     is_active: boolean;
   };
 
-  const [{ data: variants }, { data: images }, { data: inventory }] =
-    await Promise.all([
-      supabase
-        .from("product_variants")
-        .select(
-          "id, sku, attributes, price_cents, compare_at_price_cents, currency, is_active"
-        )
-        .eq("product_id", p.id)
-        .eq("is_active", true),
-      supabase
-        .from("product_images")
-        .select("id, url, alt_text, sort_order")
-        .eq("product_id", p.id)
-        .order("sort_order", { ascending: true }),
-      supabase.from("inventory").select("variant_id, quantity_available"),
-    ]);
+  const [{ data: variants }, { data: images }, { data: inventory }] = await Promise.all([
+    supabase
+      .from("product_variants")
+      .select("id, sku, attributes, price_cents, compare_at_price_cents, currency, is_active")
+      .eq("product_id", p.id)
+      .eq("is_active", true),
+    supabase
+      .from("product_images")
+      .select("id, url, alt_text, sort_order")
+      .eq("product_id", p.id)
+      .order("sort_order", { ascending: true }),
+    supabase.from("inventory").select("variant_id, quantity_available"),
+  ]);
 
   const invMap = new Map<string, number>();
   for (const inv of inventory ?? []) {
@@ -294,17 +278,9 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail> {
   };
 }
 
-export async function getRelatedProducts(
-  productId: string,
-  categoryId: string | null,
-  limit = 4
-): Promise<ProductListItem[]> {
+export async function getRelatedProducts(productId: string, categoryId: string | null, limit = 4): Promise<ProductListItem[]> {
   if (!categoryId) return [];
-  const { products } = await listProducts({
-    categoryId,
-    pageSize: limit + 1,
-    sort: "newest",
-  });
+  const { products } = await listProducts({ categoryId, pageSize: limit + 1, sort: "newest" });
   return products.filter((p) => p.id !== productId).slice(0, limit);
 }
 
