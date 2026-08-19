@@ -32,14 +32,12 @@ export function Emblem({ variant = "static" }: { variant?: EmblemVariant }) {
       className={`levance-emblem relevance-emblem--${variant}${shouldAnimate ? " relevance-emblem--arrival" : ""}`}
       role={variant === "loading" ? "status" : "img"}
       aria-label={label}
-      aria-hidden={variant === "loading" ? undefined : false}
       style={{ width: size.width, height: size.height }}
     >
       <svg
         viewBox="0 0 168 168"
         width="100%"
         height="100%"
-        viewBox="0 0 168 168"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         focusable="false"
