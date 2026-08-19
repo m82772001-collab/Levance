@@ -2,7 +2,6 @@ import "server-only";
 import { getStripeClient } from "./client";
 import type Stripe from "stripe";
 import { createSupabaseAdminClient } from "@/lib/db/supabase-admin";
-import { setUserMembership } from "@/lib/membership/assign";
 import { handleSubscriptionWebhook } from "./subscriptions";
 
 /**
@@ -23,9 +22,8 @@ export function constructWebhookEvent(
 
 /**
  * Dispatch verified Stripe events.
- * Order paid status is only set from checkout.session.completed /
- * payment_intent.succeeded when metadata contains a valid order_id.
- * Subscription events update PRO/PREMIUM membership only (never Monarch).
+ * Order paid status is only set from checkout.session.completed when the
+ * session is actually paid. Subscription events update paid memberships.
  */
 export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
@@ -34,13 +32,12 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       if (session.mode === "payment") {
         await markOrderPaidFromSession(session, event);
       } else if (session.mode === "subscription") {
-        // Membership subscription — handled after subscription object exists
         await handleSubscriptionWebhook(event);
       }
       break;
     }
     case "payment_intent.succeeded": {
-      // Backup path if checkout.session.completed is delayed
+      // Checkout Session completion remains the authoritative order transition.
       break;
     }
     case "payment_intent.payment_failed": {
@@ -65,7 +62,6 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
       break;
     }
     default:
-      // Unhandled event types are acknowledged but ignored
       break;
   }
 }
@@ -75,17 +71,9 @@ async function markOrderPaidFromSession(
   event: Stripe.Event
 ): Promise<void> {
   const orderId = session.metadata?.order_id;
-  if (!orderId) {
-    console.error("checkout.session.completed missing order_id metadata");
-    return;
-  }
-
-  if (session.payment_status !== "paid") {
-    return;
-  }
+  if (!orderId || session.payment_status !== "paid") return;
 
   const admin = createSupabaseAdminClient();
-
   const { data: order } = await admin
     .from("orders")
     .select("id, status, total_cents, currency")
@@ -97,33 +85,39 @@ async function markOrderPaidFromSession(
     return;
   }
 
-  if ((order as { status: string }).status === "paid") {
-    return; // idempotent
-  }
-
   const paymentIntentId =
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : session.payment_intent?.id ?? session.id;
 
-  // Insert payment row (service role only — no RLS insert policy for clients)
-  await admin.from("payments").insert({
-    order_id: orderId,
-    provider: "stripe",
-    provider_payment_id: paymentIntentId,
-    status: "paid",
-    amount_cents: (order as { total_cents: number }).total_cents,
-    currency: (order as { currency: string }).currency,
-    raw_event: event as unknown as Record<string, unknown>,
-  });
+  const paymentResult = await admin.from("payments").upsert(
+    {
+      order_id: orderId,
+      provider: "stripe",
+      provider_payment_id: paymentIntentId,
+      status: "paid",
+      amount_cents: order.total_cents,
+      currency: order.currency,
+      raw_event: event as unknown as Record<string, unknown>,
+    },
+    { onConflict: "provider_payment_id", ignoreDuplicates: true }
+  );
+
+  if (paymentResult.error) {
+    throw paymentResult.error;
+  }
 
   await admin
     .from("orders")
-    .update({ status: "paid", updated_at: new Date().toISOString() })
-    .eq("id", orderId);
+    .update({
+      status: "paid",
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id: paymentIntentId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId)
+    .neq("status", "paid");
 
-  // Authoritative sequence: paid first, then CJ fulfillment (idempotent).
-  // Failure leaves order PAID and logs NEEDS_ATTENTION via cj_sync_logs.
   try {
     const { fulfillPaidOrder } = await import("@/lib/integrations/cj/fulfillment");
     await fulfillPaidOrder(orderId);
