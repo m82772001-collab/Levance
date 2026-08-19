@@ -23,6 +23,11 @@ export interface Database {
         Insert: Partial<Database["public"]["Tables"]["products"]["Row"]> & { slug: string; name: string };
         Update: Partial<Database["public"]["Tables"]["products"]["Row"]>;
       };
+      ai_usage: {
+        Row: { id: string; user_id: string; feature: string; tokens_in: number; tokens_out: number; metadata: Record<string, unknown>; created_at: string };
+        Insert: { user_id: string; feature: string; tokens_in?: number; tokens_out?: number; metadata?: Record<string, unknown> };
+        Update: Partial<{ feature: string; tokens_in: number; tokens_out: number; metadata: Record<string, unknown> }>;
+      };
       assistant_memory: {
         Row: { id: string; user_id: string; memory_key: string; memory_value: string; source: "explicit" | "inferred" | "system"; created_at: string; updated_at: string };
         Insert: { user_id: string; memory_key: string; memory_value: string; source?: "explicit" | "inferred" | "system" };
