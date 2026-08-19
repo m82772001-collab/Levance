@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:core": "node --test tests/core-storefront.test.mjs",
     "db:migrate": "supabase db push",
     "db:reset": "supabase db reset"
   },
