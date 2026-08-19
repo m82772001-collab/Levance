@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
   getProductBySlug,
@@ -48,15 +49,17 @@ export default async function ProductPage({ params }: Props) {
   return (
     <div className="container-content py-10 md:py-16">
       <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-        {/* Gallery */}
         <div className="space-y-3">
-          <div className="aspect-[4/5] rounded-lg bg-neutral-100 overflow-hidden">
+          <div className="relative aspect-[4/5] rounded-lg bg-neutral-100 overflow-hidden">
             {product.images[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={product.images[0].url}
                 alt={product.images[0].alt_text ?? product.name}
-                className="h-full w-full object-cover"
+                fill
+                priority
+                sizes="(max-width: 1023px) 100vw, 50vw"
+                className="object-cover"
+                unoptimized
               />
             ) : (
               <div className="h-full w-full flex items-center justify-center text-neutral-400 text-sm">
@@ -67,16 +70,21 @@ export default async function ProductPage({ params }: Props) {
           {product.images.length > 1 && (
             <div className="grid grid-cols-4 gap-2">
               {product.images.slice(0, 4).map((img) => (
-                <div key={img.id} className="aspect-square rounded bg-neutral-100 overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
+                <div key={img.id} className="relative aspect-square rounded bg-neutral-100 overflow-hidden">
+                  <Image
+                    src={img.url}
+                    alt={img.alt_text ?? `${product.name} detail`}
+                    fill
+                    sizes="(max-width: 767px) 25vw, 12.5vw"
+                    className="object-cover"
+                    unoptimized
+                  />
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Info */}
         <div>
           {product.brand && (
             <p className="text-xs uppercase tracking-widest2 text-neutral-500 mb-2">
@@ -85,9 +93,7 @@ export default async function ProductPage({ params }: Props) {
           )}
           <h1 className="font-display text-3xl md:text-4xl leading-tight">{product.name}</h1>
           <p className="mt-4 text-lg font-medium">
-            {defaultVariant
-              ? formatMoney(minPrice, defaultVariant.currency)
-              : "—"}
+            {defaultVariant ? formatMoney(minPrice, defaultVariant.currency) : "—"}
             {defaultVariant?.compare_at_price_cents != null &&
               defaultVariant.compare_at_price_cents > minPrice && (
                 <span className="ml-2 text-sm text-neutral-400 line-through">
