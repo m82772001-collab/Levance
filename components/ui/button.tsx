@@ -24,7 +24,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center rounded px-6 py-3 text-sm font-medium tracking-wide transition-colors duration-300 ease-signature disabled:cursor-not-allowed",
+        "inline-flex min-h-11 items-center justify-center rounded px-6 py-3 text-sm font-medium tracking-wide transition-colors duration-300 ease-signature disabled:cursor-not-allowed",
         variantClasses[variant],
         className
       )}
