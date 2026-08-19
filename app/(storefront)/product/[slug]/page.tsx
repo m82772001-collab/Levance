@@ -5,6 +5,7 @@ import {
   getReviewsForProduct,
   formatMoney,
 } from "@/lib/catalog/queries";
+import { getBrandByName } from "@/lib/catalog/brands";
 import { ProductCard } from "@/components/storefront/product-card";
 import { AddToCartForm } from "@/components/storefront/add-to-cart-form";
 import { WishlistToggle } from "@/components/storefront/wishlist-toggle";
@@ -33,10 +34,11 @@ export async function generateMetadata({ params }: Props) {
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
-  const [related, reviews, user] = await Promise.all([
+  const [related, reviews, user, brandRecord] = await Promise.all([
     getRelatedProducts(product.id, product.category_id),
     getReviewsForProduct(product.id),
     getCurrentUser(),
+    product.brand ? getBrandByName(product.brand) : Promise.resolve(null),
   ]);
 
   const defaultVariant = product.variants[0];
@@ -100,6 +102,12 @@ export default async function ProductPage({ params }: Props) {
                 </span>
               )}
           </p>
+
+          {brandRecord && (
+            <p className="mt-4 rounded border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600">
+              {brandRecord.trademark_disclaimer_text}
+            </p>
+          )}
 
           {product.description && (
             <p className="mt-6 text-neutral-600 leading-relaxed whitespace-pre-line">
