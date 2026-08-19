@@ -40,6 +40,18 @@ export async function getBrandBySlug(slug: string): Promise<BrandRow> {
   return data as BrandRow;
 }
 
+export async function getBrandByName(name: string): Promise<BrandRow | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("brands")
+    .select("id, name, slug, logo_url, description, trademark_disclaimer_text, is_authorized_reseller, supplier_source")
+    .ilike("name", name)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as BrandRow | null) ?? null;
+}
+
 export async function listProductsByBrand(brandId: string, pageSize = 12): Promise<ProductListItem[]> {
   const supabase = await createSupabaseServerClient();
   const { data: products, error } = await supabase
