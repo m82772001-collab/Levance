@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listProducts, listCategories } from "@/lib/catalog/queries";
+import { listBrands } from "@/lib/catalog/brands";
 import { ProductCard } from "@/components/storefront/product-card";
 import { Emblem } from "@/components/shared/emblem";
 
@@ -9,9 +10,10 @@ export const metadata = {
 };
 
 export default async function HomePage() {
-  const [newArrivals, categories] = await Promise.all([
+  const [newArrivals, categories, brands] = await Promise.all([
     listProducts({ sort: "newest", pageSize: 4 }).catch(() => ({ products: [], total: 0, page: 1, pageSize: 4 })),
     listCategories().catch(() => []),
+    listBrands(8).catch(() => []),
   ]);
 
   return (
@@ -35,6 +37,24 @@ export default async function HomePage() {
           <h2 className="mb-10 text-center font-display text-3xl">Featured Collections</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
             {categories.slice(0, 6).map((c) => <Link key={c.id} href={`/category/${c.slug}`} className="rounded-lg border border-neutral-200 bg-white p-6 text-center transition-shadow hover:shadow-card"><span className="font-display text-lg">{c.name}</span></Link>)}
+          </div>
+        </section>
+      )}
+
+      {brands.length > 0 && (
+        <section className="border-y border-neutral-200 bg-white">
+          <div className="container-content py-14 md:py-18">
+            <div className="mb-8 flex items-end justify-between gap-4">
+              <div><p className="eyebrow mb-2">The Showroom</p><h2 className="font-display text-3xl">Shop by Brand</h2></div>
+              <span className="text-xs text-neutral-500">Curated third-party brands</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+              {brands.map((brand) => (
+                <Link key={brand.id} href={`/brands/${brand.slug}`} className="rounded-lg border border-neutral-200 px-4 py-5 text-center transition-colors hover:border-obsidian">
+                  <span className="font-medium">{brand.name}</span>
+                </Link>
+              ))}
+            </div>
           </div>
         </section>
       )}
