@@ -14,9 +14,13 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
-    // Populate with allowed remote hosts once product image sources
-    // (Supabase Storage bucket, CJ CDN, etc.) are finalized.
-    remotePatterns: [],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "rfwaythdancyusdbothq.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
   },
   experimental: {
     serverActions: {
