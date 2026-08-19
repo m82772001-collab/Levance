@@ -17,7 +17,8 @@ where n.nspname = 'public'
     'wishlists','wishlist_items','addresses','orders','order_items','payments','shipments',
     'cj_products','cj_variants','cj_inventory','cj_orders','cj_order_items','cj_shipments','cj_sync_logs','cj_webhook_events',
     'reviews','coupons','membership_tiers','membership_benefits','user_memberships','membership_history','membership_invitations',
-    'ai_usage','ai_memories','ai_conversations','ai_messages','ai_collections','ai_collection_items','product_views','ai_user_settings'
+    'ai_usage','ai_memories','ai_conversations','ai_messages','ai_collections','ai_collection_items','product_views','ai_user_settings',
+    'brands'
   )
   and relrowsecurity = false;
 -- Expected: zero rows.
@@ -42,7 +43,12 @@ select id from ai_collections where user_id = :'user_a';
 select id from product_views where user_id = :'user_a';
 select user_id from ai_user_settings where user_id = :'user_a';
 
--- Explicit cross-user inserts must fail RLS WITH CHECK.
+-- Brands are public-readable but must reject customer writes.
+select id, slug from brands limit 1;
+insert into brands (name, slug, trademark_disclaimer_text)
+values ('RLS attack brand', 'rls-attack-brand', 'This row must never be created by a customer.');
+
+-- Existing owner-scoped surfaces must reject cross-user inserts.
 insert into addresses (user_id, full_name, line1, city, postal_code, country_code)
 values (:'user_a', 'RLS attack', 'x', 'x', 'x', 'US');
 
