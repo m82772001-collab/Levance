@@ -30,6 +30,11 @@ export async function createCheckoutSession(
           product_data: { name: li.name },
         },
       })),
+      payment_intent_data: {
+        metadata: {
+          order_id: input.orderId,
+        },
+      },
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       metadata: {
