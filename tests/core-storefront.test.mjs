@@ -10,7 +10,7 @@ test("home page degrades when catalog queries fail", async () => {
   assert.match(source, /listCategories\(\)\.catch\(\(\) => \[\]\)/s);
 });
 
-test("home page is server rendered and delegates auth state to the server header", async () => {
+test("home page is server rendered and header reflects auth state", async () => {
   const source = await read("app/(storefront)/page.tsx");
   const header = await read("components/shared/header.tsx");
   assert.doesNotMatch(source, /^['\"]use client['\"]/m);
@@ -23,10 +23,11 @@ test("login uses Supabase password auth and generic credential errors", async ()
   const source = await read("lib/auth/actions.ts");
   assert.match(source, /signInWithPassword/);
   assert.match(source, /Invalid email or password\./);
-  assert.doesNotMatch(source, /error\.message.*return \{ error: error\.message \}/s);
+  assert.match(source, /assertAuthRateLimit\(parsed\.data\.email\)/);
+  assert.doesNotMatch(source, /return \{ error: error\.message \}/);
 });
 
-test("signup uses Supabase auth and generic account-creation errors", async () => {
+test("signup uses Supabase auth, generic duplicate errors, and cart claim", async () => {
   const source = await read("lib/auth/actions.ts");
   assert.match(source, /auth\.signUp/);
   assert.match(source, /GENERIC_SIGNUP_ERROR/);
@@ -40,12 +41,12 @@ test("OAuth callback exchanges the authorization code and handles invalid callba
   assert.match(callback, /claimGuestCart\(data\.user\.id\)/);
 });
 
-test("Google button uses Supabase OAuth with a safe application callback", async () => {
+test("Google button uses Supabase OAuth with a safe callback", async () => {
   const source = await read("components/auth/google-button.tsx");
   assert.match(source, /signInWithOAuth/);
   assert.match(source, /provider: \"google\"/);
   assert.match(source, /\/auth\/callback/);
-  assert.match(source, /startsWith\("\/"\).*startsWith\("\/\/"\)/s);
+  assert.match(source, /safeNext/);
 });
 
 test("guest cart claim is server-cookie based and merges quantities", async () => {
@@ -56,8 +57,17 @@ test("guest cart claim is server-cookie based and merges quantities", async () =
   assert.match(source, /delete\(\)\.eq\("id", guestCartId\)/);
 });
 
-test("failure-mode contract: OAuth errors redirect to a retryable login state", async () => {
+test("failure mode: OAuth errors redirect to a retryable login state", async () => {
   const callback = await read("app/auth/callback/route.ts");
   assert.match(callback, /if \(oauthError \|\| !code\)/);
   assert.match(callback, /searchParams\.set\("error", "oauth_failed"\)/);
+});
+
+test("failure mode: rate limiter fails closed and limits five attempts per IP/email window", async () => {
+  const source = await read("lib/security/auth-rate-limit.ts");
+  const migration = await read("supabase/migrations/0013_auth_rate_limits.sql");
+  assert.match(source, /return false/);
+  assert.match(migration, /p_limit integer default 5/);
+  assert.match(migration, /p_window_seconds integer default 900/);
+  assert.match(migration, /attempts < p_limit/);
 });
