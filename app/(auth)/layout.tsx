@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Emblem } from "@/components/shared/emblem";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
