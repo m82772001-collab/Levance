@@ -26,18 +26,18 @@ export async function SiteHeader() {
         <nav aria-label="Primary" className="hidden items-center gap-8 lg:flex">
           {primaryNav.map((item) => <Link key={item.href} href={item.href} className="text-sm text-neutral-700 transition-colors hover:text-obsidian">{item.label}</Link>)}
         </nav>
-        <div className="flex items-center gap-5 text-sm">
-          <Link href="/shop" aria-label="Search" className="hover:text-champagne-line">Search</Link>
-          <Link href="/account/wishlist" aria-label="Wishlist" className="hover:text-champagne-line">Wishlist</Link>
+        <div className="flex items-center gap-1 text-sm sm:gap-2">
+          <Link href="/shop" aria-label="Search" className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 hover:text-champagne-line">Search</Link>
+          <Link href="/account/wishlist" aria-label="Wishlist" className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 hover:text-champagne-line">Wishlist</Link>
           {user ? (
-            <Link href="/account" aria-label="Account" className="flex items-center gap-2 hover:text-champagne-line">
+            <Link href="/account" aria-label="Account" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 px-2 hover:text-champagne-line">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-obsidian text-xs text-ivory" aria-hidden="true">{initial}</span>
-              <span>Account</span>
+              <span className="hidden sm:inline">Account</span>
             </Link>
           ) : (
-            <Link href="/login" aria-label="Sign in" className="hover:text-champagne-line">Sign in</Link>
+            <Link href="/login" aria-label="Sign in" className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 hover:text-champagne-line">Sign in</Link>
           )}
-          <Link href="/cart" aria-label="Cart" className="hover:text-champagne-line">Cart</Link>
+          <Link href="/cart" aria-label="Cart" className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 hover:text-champagne-line">Cart</Link>
         </div>
       </div>
     </header>
