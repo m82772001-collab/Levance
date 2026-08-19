@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Emblem } from "@/components/shared/emblem";
+import { getCurrentUser } from "@/lib/auth/session";
 
 const primaryNav = [
   { label: "New Arrivals", href: "/shop?filter=new" },
@@ -11,7 +12,10 @@ const primaryNav = [
   { label: "Membership", href: "/membership" },
 ];
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const user = await getCurrentUser();
+  const initial = user?.email?.slice(0, 1).toUpperCase() ?? null;
+
   return (
     <header className="border-b border-neutral-200 bg-ivory">
       <div className="container-content flex h-20 items-center justify-between">
@@ -25,7 +29,14 @@ export function SiteHeader() {
         <div className="flex items-center gap-5 text-sm">
           <Link href="/shop" aria-label="Search" className="hover:text-champagne-line">Search</Link>
           <Link href="/account/wishlist" aria-label="Wishlist" className="hover:text-champagne-line">Wishlist</Link>
-          <Link href="/account" aria-label="Account" className="hover:text-champagne-line">Account</Link>
+          {user ? (
+            <Link href="/account" aria-label="Account" className="flex items-center gap-2 hover:text-champagne-line">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-obsidian text-xs text-ivory" aria-hidden="true">{initial}</span>
+              <span>Account</span>
+            </Link>
+          ) : (
+            <Link href="/login" aria-label="Sign in" className="hover:text-champagne-line">Sign in</Link>
+          )}
           <Link href="/cart" aria-label="Cart" className="hover:text-champagne-line">Cart</Link>
         </div>
       </div>
