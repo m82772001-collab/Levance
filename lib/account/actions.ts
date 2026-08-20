@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/rbac";
 import { createSupabaseServerClient } from "@/lib/db/supabase-server";
+import { resolveCartId } from "@/lib/cart/service";
 import { profileUpdateSchema, addressSchema } from "@/lib/validation/account";
 import { z } from "zod";
 
@@ -190,4 +191,83 @@ export async function toggleWishlistAction(
   if (error) return { error: error.message };
   revalidatePath("/account/wishlist");
   return { success: "Added to wishlist." };
+}
+
+export async function reorderAction(
+  _prev: AccountActionState,
+  formData: FormData
+): Promise<AccountActionState> {
+  const user = await requireUser();
+  const orderId = String(formData.get("orderId") ?? "");
+  if (!z.string().uuid().safeParse(orderId).success) return { error: "Invalid order." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("id", orderId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+
+  const { data: items, error: itemsError } = await supabase
+    .from("order_items")
+    .select("variant_id, quantity")
+    .eq("order_id", orderId);
+  if (itemsError) return { error: "Unable to load this order." };
+  if (!items?.length) return { error: "This order has no items to reorder." };
+
+  const variantIds = items.map((item) => (item as { variant_id: string }).variant_id);
+  const { data: variants } = await supabase
+    .from("product_variants")
+    .select("id, is_active, product_id, products(status, is_active)")
+    .in("id", variantIds);
+
+  const eligible = new Set(
+    (variants ?? [])
+      .filter((v) => {
+        const row = v as { id: string; is_active: boolean; products: { status: string; is_active: boolean } | null };
+        return row.is_active && row.products?.is_active && row.products.status === "active";
+      })
+      .map((v) => (v as { id: string }).id)
+  );
+
+  if (eligible.size === 0) return { error: "None of the items from this order are currently available." };
+
+  const { cartId } = await resolveCartId();
+  let added = 0;
+  for (const item of items) {
+    const row = item as { variant_id: string; quantity: number };
+    if (!eligible.has(row.variant_id)) continue;
+
+    const { data: existing } = await supabase
+      .from("cart_items")
+      .select("id, quantity")
+      .eq("cart_id", cartId)
+      .eq("variant_id", row.variant_id)
+      .maybeSingle();
+
+    if (existing) {
+      const existingRow = existing as { id: string; quantity: number };
+      const { error } = await supabase
+        .from("cart_items")
+        .update({ quantity: existingRow.quantity + row.quantity })
+        .eq("id", existingRow.id)
+        .eq("cart_id", cartId);
+      if (error) return { error: "Unable to update the cart." };
+    } else {
+      const { error } = await supabase.from("cart_items").insert({
+        cart_id: cartId,
+        variant_id: row.variant_id,
+        quantity: row.quantity,
+      });
+      if (error) return { error: "Unable to add an item to the cart." };
+    }
+    added += 1;
+  }
+
+  if (!added) return { error: "None of the items from this order are currently available." };
+  revalidatePath("/cart");
+  revalidatePath(`/account/orders/${orderId}`);
+  return { success: `${added} item${added === 1 ? "" : "s"} added to your cart.` };
 }
